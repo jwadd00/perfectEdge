@@ -1,71 +1,95 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime
+import gspread
+from gspread_dataframe import get_as_dataframe, set_with_dataframe
 
 class GSheetManager:
     def __init__(self):
-        self.conn = st.connection("gsheets", type=GSheetsConnection)
-        # Default sheet names
-        self.SCHEDULE_SHEET = "Schedule"
-        self.OPTIONS_SHEET = "Options"
+        # Authenticate using secrets
+        try:
+            # st.secrets["connections"]["gsheets"] contains the service account info
+            # We also need to strip out the 'spreadsheet' and 'worksheet' keys to pass to gspread credentials
+            secrets = st.secrets["connections"]["gsheets"]
+            
+            # gspread needs the credentials dict. The extra keys 'spreadsheet' and 'worksheet' 
+            # might cause issues if passed directly to from_dict, but usually it ignores extras.
+            # Let's clean it just in case or use a subset.
+            # Actually, service_account_from_dict expects specific keys.
+            
+            self.gc = gspread.service_account_from_dict(secrets)
+            
+            self.spreadsheet_url = secrets.get("spreadsheet")
+            self.sh = self.gc.open_by_url(self.spreadsheet_url)
+            
+            self.SCHEDULE_SHEET_NAME = "Schedule"
+            self.OPTIONS_SHEET_NAME = "Options"
+            
+        except Exception as e:
+            st.error(f"Failed to authenticate with Google Sheets: {e}")
+            self.sh = None
+
+    def _get_worksheet(self, name):
+        if not self.sh: return None
+        try:
+            return self.sh.worksheet(name)
+        except gspread.WorksheetNotFound:
+            # Create if not exists? Or return None
+            st.warning(f"Worksheet '{name}' not found.")
+            return None
 
     def get_options(self):
-        """
-        Fetches options from the 'Options' worksheet.
-        Expected columns: 'Staff', 'Crew Color', 'Trailer', 'Equipment'
-        """
+        ws = self._get_worksheet(self.OPTIONS_SHEET_NAME)
+        if not ws: return pd.DataFrame()
+        
         try:
-            df = self.conn.read(worksheet=self.OPTIONS_SHEET)
+            # get_as_dataframe reads the whole sheet
+            df = get_as_dataframe(ws, evaluate_formulas=True)
+            # Drop empty rows/cols
+            df = df.dropna(how='all').dropna(axis=1, how='all')
             return df
         except Exception as e:
-            st.error(f"Error reading Options sheet: {e}")
+            st.error(f"Error reading Options: {e}")
             return pd.DataFrame()
 
     def save_options(self, df):
-        """
-        Saves the options DataFrame back to the 'Options' worksheet.
-        """
+        ws = self._get_worksheet(self.OPTIONS_SHEET_NAME)
+        if not ws: return
+        
         try:
-            self.conn.update(worksheet=self.OPTIONS_SHEET, data=df)
-            st.success("Options updated successfully!")
-            self.conn.reset() # Clear cache
+            ws.clear()
+            set_with_dataframe(ws, df)
+            st.success("Options updated!")
         except Exception as e:
             st.error(f"Error saving Options: {e}")
 
     def get_schedule(self):
-        """
-        Fetches the full schedule from the 'Schedule' worksheet.
-        """
+        ws = self._get_worksheet(self.SCHEDULE_SHEET_NAME)
+        if not ws: return pd.DataFrame()
+        
         try:
-            df = self.conn.read(worksheet=self.SCHEDULE_SHEET)
-            # Ensure Date column is datetime
+            df = get_as_dataframe(ws, evaluate_formulas=True)
+            df = df.dropna(how='all').dropna(axis=1, how='all')
             if 'Date' in df.columns:
                 df['Date'] = pd.to_datetime(df['Date']).dt.date
             return df
         except Exception as e:
-            st.error(f"Error reading Schedule sheet: {e}")
+            st.error(f"Error reading Schedule: {e}")
             return pd.DataFrame()
 
     def save_schedule(self, df):
-        """
-        Saves the schedule DataFrame back to the 'Schedule' worksheet.
-        """
+        ws = self._get_worksheet(self.SCHEDULE_SHEET_NAME)
+        if not ws: return
+        
         try:
-            self.conn.update(worksheet=self.SCHEDULE_SHEET, data=df)
-            st.success("Schedule updated successfully!")
-            self.conn.reset()
+            # Ensure Date objects are converted to strings for JSON serialization if needed,
+            # but set_with_dataframe handles it usually.
+            # Re-convert dates to strings to be safe?
+            save_df = df.copy()
+            if 'Date' in save_df.columns:
+                save_df['Date'] = save_df['Date'].astype(str)
+                
+            ws.clear()
+            set_with_dataframe(ws, save_df)
+            st.success("Schedule updated!")
         except Exception as e:
             st.error(f"Error saving Schedule: {e}")
-
-    def get_schedule_for_date(self, date):
-        """
-        Filters the schedule for a specific date.
-        """
-        df = self.get_schedule()
-        if df.empty or 'Date' not in df.columns:
-            return pd.DataFrame()
-        
-        # Filter by date
-        mask = df['Date'] == date
-        return df[mask]
