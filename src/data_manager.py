@@ -76,14 +76,32 @@ class GSheetManager:
             st.error(f"Error reading Schedule: {e}")
             return pd.DataFrame()
 
+    def add_schedule_rows(self, df):
+        """Append new rows to the schedule without overwriting existing data."""
+        ws = self._get_worksheet(self.SCHEDULE_SHEET_NAME)
+        if not ws: return
+
+        try:
+            # Convert DataFrame to list of lists for appending
+            # Handle Date conversion
+            save_df = df.copy()
+            if 'Date' in save_df.columns:
+                save_df['Date'] = save_df['Date'].astype(str)
+            
+            # gspread append_rows expects a list of lists
+            data_to_append = save_df.values.tolist()
+            
+            ws.append_rows(data_to_append)
+            st.success("New jobs added successfully!")
+        except Exception as e:
+            st.error(f"Error adding rows: {e}")
+
     def save_schedule(self, df):
+        # Keeping this for legacy or full overwrite if needed, but alerting user
         ws = self._get_worksheet(self.SCHEDULE_SHEET_NAME)
         if not ws: return
         
         try:
-            # Ensure Date objects are converted to strings for JSON serialization if needed,
-            # but set_with_dataframe handles it usually.
-            # Re-convert dates to strings to be safe?
             save_df = df.copy()
             if 'Date' in save_df.columns:
                 save_df['Date'] = save_df['Date'].astype(str)

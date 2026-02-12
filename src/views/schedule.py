@@ -18,70 +18,65 @@ def show_schedule_page(conn: GSheetManager):
     trailers = options_df['Trailer'].dropna().astype(str).tolist() if 'Trailer' in options_df.columns else []
     equipment = options_df['Equipment'].dropna().astype(str).tolist() if 'Equipment' in options_df.columns else []
 
+    # --- Add New Job Form ---
+    with st.expander("➕ Add New Job", expanded=True):
+        with st.form("add_job_form"):
+            st.write("Add a new job entry for the selected date.")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Defaults
+                f_crew = st.selectbox("Crew Color", options=crew_colors)
+                f_job = st.text_input("Job Name")
+                f_staff = st.selectbox("Staff", options=staff_options)
+            
+            with col2:
+                f_trailer = st.selectbox("Trailer", options=trailers)
+                f_equip = st.selectbox("Equipment", options=equipment)
+            
+            if st.form_submit_button("Add Job"):
+                # Create a 1-row DataFrame
+                new_row = pd.DataFrame([{
+                    "Date": selected_date,
+                    "Crew Color": f_crew,
+                    "Job Name": f_job,
+                    "Staff": f_staff,
+                    "Trailer": f_trailer,
+                    "Equipment": f_equip
+                }])
+                
+                # Append to Google Sheet
+                conn.add_schedule_rows(new_row)
+                st.rerun()
+
+    # --- View Schedule ---
+    st.divider()
+    st.subheader(f"Current Schedule")
+
     # Load Schedule
     schedule_df = conn.get_schedule()
     
-    # Filter for selected date (for display/editing context)
-    # Ideally, we want to edit the WHOLE schedule but filtered views are easier.
-    # But st.data_editor on a filtered dataframe doesn't easily sync back to the main one unless we handle the merge.
-    # Simplified approach: 
-    # 1. Load full schedule.
-    # 2. Add 'Date' column if missing.
-    # 3. Use data_editor on the WHOLE dataframe but maybe filter visibility? 
-    #    No, `st.data_editor` edits what is shown.
-    # Better approach for scalable apps: Load only today's data, save it back by appending/updating.
-    # But for a simple GSheet backend, reading standardizing on one big sheet is fine for now.
-    
-    # Let's show the WHOLE schedule for now with a column configuration to filter? 
-    # Create a new entry mode vs View mode.
-    
-    st.subheader(f"Schedule for {selected_date}")
-
     if schedule_df.empty:
+        st.info("No schedule data found.")
         schedule_df = pd.DataFrame(columns=['Date', 'Crew Color', 'Job Name', 'Staff', 'Trailer', 'Equipment'])
+    else:
+         # Ensure Date column exists and filter
+        if 'Date' not in schedule_df.columns:
+            schedule_df['Date'] = pd.to_datetime(selected_date) # Fallback
 
-    # Ensure Date column exists
-    if 'Date' not in schedule_df.columns:
-        schedule_df['Date'] = pd.to_datetime(selected_date)
-
-    # Convert Date to date object for comparison
-    # schedule_df['Date'] = pd.to_datetime(schedule_df['Date']).dt.date
-    
-    # Filter for display
-    # daily_data = schedule_df[schedule_df['Date'] == selected_date]
-    # Actually, let's just show the full editor but sorted by date, 
-    # and maybe highlight today?
-    # Or just let them edit the main table.
-    
-    # Best UX: Show only selected date's rows, plus an "Add Row" button that pre-fills the date.
-    # But st.data_editor doesn't support "pre-fill new row" easily.
-    
-    # Let's stick to: View/Edit the table.
-    
-    column_config = {
-        "Date": st.column_config.DateColumn("Date", required=True, default=selected_date),
-        "Crew Color": st.column_config.SelectboxColumn("Crew Color", options=crew_colors, required=True),
-        "Staff": st.column_config.ListColumn("Staff"), # Multiselect for staff? Streamlit only validates ListColumn slightly. 
-        # actually TextColumn or Selectbox. If multiple staff, maybe Text for now or Link.
-        # Selectbox only allows one. 
-        # Let's use Selectbox for 'Lead' and maybe another for 'Helper'? 
-        # Or just a text field for "Staff List".
-        "Job Name": st.column_config.TextColumn("Job Name", required=True),
-        "Trailer": st.column_config.SelectboxColumn("Trailer", options=trailers),
-        "Equipment": st.column_config.SelectboxColumn("Equipment", options=equipment) 
-    }
-    
-    # If we want multiple staff, we might need a ListColumn which is display only, or just a text input.
-    # Let's try Selectbox for simplicity first, assuming 1 generic "Staff" assignments or comma separated text.
-    # User asked for "Master Daily Schedule".
-    
-    edited_schedule = st.data_editor(
-        schedule_df,
-        num_rows="dynamic",
-        column_config=column_config,
-        use_container_width=True,
-        key="schedule_editor"
-    )
-
-    if st.button("Save Schedule"):
-        conn.save_schedule(edited_schedule)
+        # Filter for display - Show ALL or just Selected Date?
+        # Let's show selected date by default, with option to show all?
+        # User said "Master Daily Schedule", usually implies seeing the day.
+        
+        # Ensure we are comparing dates correctly
+        # schedule_df['Date'] is likely object (date) from our manager fix
+        
+        # Filter
+        daily_mask = schedule_df['Date'] == selected_date
+        daily_df = schedule_df[daily_mask]
+        
+        st.dataframe(daily_df, use_container_width=True, hide_index=True)
+        
+        # Optional: Show full history
+        with st.expander("View Full History"):
+            st.dataframe(schedule_df, use_container_width=True)

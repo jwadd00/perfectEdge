@@ -4,12 +4,12 @@ from src.views import show_admin_page, show_schedule_page
 
 # Set page config
 st.set_page_config(
-    page_title="Perfect Edge Schedule Manager",
+    page_title="Job Schedule",
     page_icon="📅",
     layout="wide",
 )
 
-st.title("Perfect Edge Schedule Manager")
+st.title("Job Schedule")
 
 # Setup connection
 # We initialize the manager once, it handles the connection
