@@ -58,6 +58,13 @@ def show_admin_page(conn: GSheetManager):
         if not equip_df.empty: equip_df.columns = ["Equipment"]
         edited_equip = st.data_editor(equip_df, num_rows="dynamic", use_container_width=True, key="editor_equip")
 
+    # 5. Job Type (New)
+    st.divider()
+    st.subheader("Job Types")
+    job_type_df = get_col_df(df, "Job Type")
+    if not job_type_df.empty: job_type_df.columns = ["Job Type"]
+    edited_job_type = st.data_editor(job_type_df, num_rows="dynamic", use_container_width=True, key="editor_job_type")
+
     if st.button("Save All Changes"):
         # Merge into one DataFrame for saving (longest list determines length)
         # We need to extract the columns
@@ -70,9 +77,10 @@ def show_admin_page(conn: GSheetManager):
         c_list = get_list(edited_crew, 'Crew Color')
         t_list = get_list(edited_trailer, 'Trailer')
         e_list = get_list(edited_equip, 'Equipment')
+        j_list = get_list(edited_job_type, 'Job Type')
         
         # Create a dict with padding
-        max_len = max(len(s_list), len(c_list), len(t_list), len(e_list))
+        max_len = max(len(s_list), len(c_list), len(t_list), len(e_list), len(j_list))
         
         # Pad with empty strings or None? None is better for dropna later
         def pad(l, n):
@@ -82,7 +90,8 @@ def show_admin_page(conn: GSheetManager):
             "Staff": pad(s_list, max_len),
             "Crew Color": pad(c_list, max_len),
             "Trailer": pad(t_list, max_len),
-            "Equipment": pad(e_list, max_len)
+            "Equipment": pad(e_list, max_len),
+            "Job Type": pad(j_list, max_len)
         }
         
         # We might need to preserve other columns if they exist?
@@ -90,3 +99,8 @@ def show_admin_page(conn: GSheetManager):
         
         final_df = pd.DataFrame(data)
         conn.save_options(final_df)
+        
+        # Prime the cache for the Schedule page
+        with st.spinner("Preloading schedule data..."):
+            conn.get_schedule()
+        st.success("Options saved and schedule data refreshed!")

@@ -17,6 +17,7 @@ def show_schedule_page(conn: GSheetManager):
     crew_colors = options_df['Crew Color'].dropna().astype(str).tolist() if 'Crew Color' in options_df.columns else []
     trailers = options_df['Trailer'].dropna().astype(str).tolist() if 'Trailer' in options_df.columns else []
     equipment = options_df['Equipment'].dropna().astype(str).tolist() if 'Equipment' in options_df.columns else []
+    job_types = options_df['Job Type'].dropna().astype(str).tolist() if 'Job Type' in options_df.columns else []
 
     # --- Add New Job Form ---
     with st.expander("➕ Add New Job", expanded=True):
@@ -28,6 +29,7 @@ def show_schedule_page(conn: GSheetManager):
                 # Defaults
                 f_crew = st.selectbox("Crew Color", options=crew_colors)
                 f_job = st.text_input("Job Name")
+                f_type = st.selectbox("Job Type", options=job_types)
                 f_staff = st.selectbox("Staff", options=staff_options)
             
             with col2:
@@ -40,6 +42,7 @@ def show_schedule_page(conn: GSheetManager):
                     "Date": selected_date,
                     "Crew Color": f_crew,
                     "Job Name": f_job,
+                    "Job Type": f_type,
                     "Staff": f_staff,
                     "Trailer": f_trailer,
                     "Equipment": f_equip
@@ -58,7 +61,7 @@ def show_schedule_page(conn: GSheetManager):
     
     if schedule_df.empty:
         st.info("No schedule data found.")
-        schedule_df = pd.DataFrame(columns=['Date', 'Crew Color', 'Job Name', 'Staff', 'Trailer', 'Equipment'])
+        schedule_df = pd.DataFrame(columns=['Date', 'Crew Color', 'Job Name', 'Job Type', 'Staff', 'Trailer', 'Equipment'])
     else:
          # Ensure Date column exists and filter
         if 'Date' not in schedule_df.columns:
